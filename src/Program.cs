@@ -1,54 +1,27 @@
-﻿// using System;
-// using System.IO;
-// using Futronic.Devices.FS80;
+using Microsoft.OpenApi.Models;
 
-// namespace ReadFingerprintDemo
-// {
-//     class Program
-//     {
-//         static void Main(string[] args)
-//         {
-//             Console.WriteLine("LibScanApi Demo");
+var builder = WebApplication.CreateBuilder(args);
 
-//             var accessor = new DeviceAccessor();
+builder.Services.AddOpenApi();
+builder.Services.AddControllers();
 
-//             using (var device = accessor.AccessFingerprintDevice())
-//             {
-//                 device.SwitchLedState(false, false);
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddMvc();
 
-//                 device.FingerDetected += (sender, eventArgs) =>
-//                 {
-//                     Console.WriteLine("Finger Detected!");
 
-//                     device.SwitchLedState(true, false);
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "My API", Version = "v1" });
+});
 
-//                     // Save fingerprint to temporary folder
-//                     var fingerprint = device.ReadFingerprint();
-//                     var tempFile = Path.GetTempFileName();
-//                     var tmpBmpFile = Path.ChangeExtension(tempFile, "bmp");
-//                     fingerprint.Save(tmpBmpFile);
+var app = builder.Build();
 
-//                     Console.WriteLine("Saved to " + tmpBmpFile);
-//                 };
+app.MapOpenApi();
+app.UseSwagger();
+app.UseSwaggerUI();
 
-//                 device.FingerReleased += (sender, eventArgs) =>
-//                 {
-//                     Console.WriteLine("Finger Released!");
+app.UseHttpsRedirection();
 
-//                     device.SwitchLedState(false, true);
-//                 };
+app.MapControllers();
 
-//                 Console.WriteLine("FingerprintDevice Opened");
-
-//                 device.StartFingerDetection();
-//                 device.SwitchLedState(false, true);
-
-//                 Console.ReadLine();
-
-//                 Console.WriteLine("Exiting...");
-
-//                 device.SwitchLedState(false, false);
-//             }
-//         }
-//     }
-// }
+app.Run();
