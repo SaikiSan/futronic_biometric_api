@@ -79,4 +79,9 @@
               "privateAssets": "all"
             }
           },
-       
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.100/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

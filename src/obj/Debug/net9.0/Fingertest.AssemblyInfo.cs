@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Fingertest")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+42b0bdbabd1079394d356304429a383c74ecd542")]
 [assembly: System.Reflection.AssemblyProductAttribute("Fingertest")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Fingertest")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
