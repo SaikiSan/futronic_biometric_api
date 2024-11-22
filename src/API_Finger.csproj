@@ -14,4 +14,16 @@
     <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="libs\FTRAPI.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="libs\ftrScanAPI.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="libs\ftrSDKHelper12.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

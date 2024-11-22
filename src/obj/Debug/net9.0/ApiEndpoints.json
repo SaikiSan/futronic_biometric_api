@@ -1,0 +1,28 @@
+[
+  {
+    "ContainingType": "API_Finger.AuthenticationController",
+    "Method": "RegisterUser",
+    "RelativePath": "api/Authentication",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "person",
+        "Type": "API_Finger.UserViewModel",
+        "IsRequired": true
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "API_Finger.AuthenticationController",
+    "Method": "ValidateFinger",
+    "RelativePath": "api/Authentication",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
+  }
+]

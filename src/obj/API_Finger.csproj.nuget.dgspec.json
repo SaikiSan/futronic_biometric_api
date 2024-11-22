@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "c:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\API_Finger\\API_Finger\\API_Finger.csproj": {}
+    "C:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\console_finger\\Fingertest\\futronic_biometric_api\\src\\API_Finger.csproj": {}
   },
   "projects": {
-    "c:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\API_Finger\\API_Finger\\API_Finger.csproj": {
+    "C:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\console_finger\\Fingertest\\futronic_biometric_api\\src\\API_Finger.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\API_Finger\\API_Finger\\API_Finger.csproj",
+        "projectUniqueName": "C:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\console_finger\\Fingertest\\futronic_biometric_api\\src\\API_Finger.csproj",
         "projectName": "API_Finger",
-        "projectPath": "c:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\API_Finger\\API_Finger\\API_Finger.csproj",
+        "projectPath": "C:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\console_finger\\Fingertest\\futronic_biometric_api\\src\\API_Finger.csproj",
         "packagesPath": "C:\\Users\\Frizzi\\.nuget\\packages\\",
-        "outputPath": "c:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\API_Finger\\API_Finger\\obj\\",
+        "outputPath": "C:\\Users\\Frizzi\\Documents\\GIT\\fingerPrint\\console_finger\\Fingertest\\futronic_biometric_api\\src\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

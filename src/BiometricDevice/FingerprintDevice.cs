@@ -7,14 +7,14 @@ namespace BiometricDevices
 {
     public class FingerprintDevice : IDisposable
     {
-        private const int FingerPresenseCheckIntervalInMs = 50;
-        private const int FingerDetectionContrastThreshold = 800;
+        private const int FingerPresenceCheckIntervalMs = 50;
+        private const int FingerDetectionThreshold = 800;
         private const int NDose = 4;
 
         private readonly IntPtr handle;
         private readonly Timer fingerDetectionTimer;
-
-        private readonly object ledStatusWritingLock = new object();
+        private volatile bool isFingerDetected; // Reduz a concorrência de threads
+        private readonly object ledLock = new(); // Lock compartilhado para LEDs
 
         public event EventHandler FingerDetected;
         public event EventHandler FingerReleased;
@@ -22,147 +22,103 @@ namespace BiometricDevices
         public FingerprintDevice(IntPtr handle)
         {
             this.handle = handle;
-            this.fingerDetectionTimer = new Timer(this.FingerDetectionCallback, null, Timeout.Infinite, Timeout.Infinite);
+            fingerDetectionTimer = new Timer(FingerDetectionCallback, null, Timeout.Infinite, Timeout.Infinite);
         }
+
+        public bool IsFingerPresent => isFingerDetected;
 
         public bool GreenLed
         {
-            get => this.GetLedState().GreenIsOn;
-            set => this.SetGreenLed(value);
+            get => GetLedState().GreenIsOn;
+            set => SetLedState(green: value, red: RedLed);
         }
 
         public bool RedLed
         {
-            get => this.GetLedState().RedIsOn;
-            set => this.SetRedLed(value);
+            get => GetLedState().RedIsOn;
+            set => SetLedState(green: GreenLed, red: value);
         }
 
-        public bool IsFingerPresent { get; private set; }
+        public void StartFingerDetection() => fingerDetectionTimer.Change(0, FingerPresenceCheckIntervalMs);
 
-        public void StartFingerDetection()
+        public void StopFingerDetection() => fingerDetectionTimer.Change(Timeout.Infinite, Timeout.Infinite);
+
+        public Bitmap ReadFingerprint()
         {
-            fingerDetectionTimer.Change(0, FingerPresenseCheckIntervalInMs);
-        }
-        public void StopFingerDetection()
-        {
-            fingerDetectionTimer.Change(Timeout.Infinite, Timeout.Infinite);
-        }
-
-        private void FingerDetectionCallback(object state)
-        {
-            var result = LibScanApi.ftrScanIsFingerPresent(this.handle, out var pFrameParameters);
-
-            if (!result)
+            if (LibScanApi.ftrScanGetImageSize(handle, out var imageSize))
             {
-                // There could be an error
-                // var error = LibScanApi.GetLastError();
-                return;
+                var imageBuffer = new byte[imageSize.nImageSize];
+                if (LibScanApi.ftrScanGetImage(handle, NDose, imageBuffer))
+                {
+                    return ConvertToBitmap(imageBuffer, imageSize.nWidth, imageSize.nHeight);
+                }
             }
-
-            var lastFingerDetectedResult = pFrameParameters.nContrastOnDose2 > FingerDetectionContrastThreshold;
-
-            if (lastFingerDetectedResult && !this.IsFingerPresent)
-            {
-                this.IsFingerPresent = true;
-                this.OnFingerDetected();
-            }
-
-            if (!lastFingerDetectedResult && this.IsFingerPresent)
-            {
-                this.IsFingerPresent = false;
-                this.OnFingerReleased();
-            }
+            throw new InvalidOperationException("Falha ao capturar a imagem da impressão digital.");
         }
 
         public void Dispose()
         {
-            this.fingerDetectionTimer.Change(Timeout.Infinite, Timeout.Infinite);
-            this.fingerDetectionTimer.Dispose();
-
-            LibScanApi.ftrScanCloseDevice(this.handle);
+            fingerDetectionTimer.Dispose();
+            LibScanApi.ftrScanCloseDevice(handle);
         }
 
-        protected virtual void OnFingerDetected()
+        private void FingerDetectionCallback(object state)
         {
-            FingerDetected?.Invoke(this, EventArgs.Empty);
-        }
-
-        public LedState GetLedState()
-        {
-            LibScanApi.ftrScanGetDiodesStatus(this.handle, out bool greenIsOn, out bool redIsOn);
-
-            return new LedState()
+            if (LibScanApi.ftrScanIsFingerPresent(handle, out var frameParams))
             {
-                GreenIsOn = greenIsOn,
-                RedIsOn = redIsOn,
-            };
+                var fingerDetectedNow = frameParams.nContrastOnDose2 > FingerDetectionThreshold;
+
+                if (fingerDetectedNow && !isFingerDetected)
+                {
+                    isFingerDetected = true;
+                    OnFingerDetected();
+                }
+                else if (!fingerDetectedNow && isFingerDetected)
+                {
+                    isFingerDetected = false;
+                    OnFingerReleased();
+                }
+            }
         }
 
-        public void SwitchLedState(bool green, bool red)
+        private Bitmap ConvertToBitmap(byte[] imageBuffer, int width, int height)
         {
-            LibScanApi.ftrScanSetDiodesStatus(this.handle, (byte)(green ? 255 : 0), (byte)(red ? 255 : 0));
-        }
-
-        public Bitmap ReadFingerprint()
-        {
-            var t = new LibScanApi._FTRSCAN_IMAGE_SIZE();
-            LibScanApi.ftrScanGetImageSize(this.handle, out t);
-
-            byte[] arr = new byte[t.nImageSize];
-            LibScanApi.ftrScanGetImage(this.handle, NDose, arr);
-
-            var width = t.nWidth;
-            var height = t.nHeight;
-
-            var image = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+            var bitmap = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
             for (int y = 0; y < height; y++)
             {
                 for (int x = 0; x < width; x++)
                 {
-                    byte a = (byte)(0xFF - arr[(y * width) + x]);
-
-                    image.SetPixel(x, y, Color.FromArgb(a, a, a));
+                    byte pixelValue = (byte)(0xFF - imageBuffer[y * width + x]);
+                    var color = Color.FromArgb(pixelValue, pixelValue, pixelValue);
+                    bitmap.SetPixel(x, y, color);
                 }
             }
-
-            return image;
+            return bitmap;
         }
 
-        protected void SetGreenLed(bool state)
+        private void SetLedState(bool green, bool red)
         {
-            lock (this.ledStatusWritingLock)
+            lock (ledLock)
             {
-                LibScanApi.ftrScanGetDiodesStatus(this.handle, out bool greenIsOn, out bool redIsOn);
-
-                greenIsOn = state;
-
-                LibScanApi.ftrScanSetDiodesStatus(this.handle, (byte)(greenIsOn ? 255 : 0), (byte)(redIsOn ? 255 : 0));
+                LibScanApi.ftrScanSetDiodesStatus(handle, (byte)(green ? 255 : 0), (byte)(red ? 255 : 0));
             }
         }
 
-        protected void SetRedLed(bool state)
+        private LedState GetLedState()
         {
-            lock (this.ledStatusWritingLock)
-            {
-                LibScanApi.ftrScanGetDiodesStatus(this.handle, out bool greenIsOn, out bool redIsOn);
-
-                redIsOn = state;
-
-                LibScanApi.ftrScanSetDiodesStatus(this.handle, (byte)(greenIsOn ? 255 : 0), (byte)(redIsOn ? 255 : 0));
-            }
+            LibScanApi.ftrScanGetDiodesStatus(handle, out bool green, out bool red);
+            return new LedState { GreenIsOn = green, RedIsOn = red };
         }
 
-        protected virtual void OnFingerReleased()
-        {
-            FingerReleased?.Invoke(this, EventArgs.Empty);
-        }
+        protected virtual void OnFingerDetected() => FingerDetected?.Invoke(this, EventArgs.Empty);
+
+        protected virtual void OnFingerReleased() => FingerReleased?.Invoke(this, EventArgs.Empty);
     }
 
     public class LedState
     {
         public bool GreenIsOn { get; set; }
-
         public bool RedIsOn { get; set; }
     }
 }

@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "lr4Et9ybIz19ysrrkWQaAS8CW+INl1wyx8MX1k7Nzbw=",
+  "Source": "API_Finger",
+  "BasePath": "_content/API_Finger",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}
