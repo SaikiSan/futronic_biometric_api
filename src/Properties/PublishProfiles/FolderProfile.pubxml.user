@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+https://go.microsoft.com/fwlink/?LinkID=208121.
+-->
+<Project>
+  <PropertyGroup>
+    <_PublishTargetUrl>C:\Users\Frizzi\Documents\GIT\fingerPrint\console_finger\Fingertest\futronic_biometric_api\src\bin\Release\net9.0\publish\</_PublishTargetUrl>
+    <History>True|2024-11-22T12:48:44.7795660Z||;True|2024-11-22T09:33:59.2105181-03:00||;True|2024-11-21T16:09:05.5399469-03:00||;True|2024-11-21T13:12:40.4972386-03:00||;True|2024-11-21T08:19:37.4968909-03:00||;</History>
+    <LastFailureDetails />
+  </PropertyGroup>
+</Project>

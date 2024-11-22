@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using BiometricDevices;
@@ -8,22 +9,29 @@ using Microsoft.AspNetCore.Mvc;
 using SourceAFIS;
 
 namespace API_Finger;
+
 [ApiController]
 [Route("api/[controller]")]
 public class AuthenticationController : ControllerBase
 {
-
     private const string PrintsFolderName = "Prints";
+    private const int DetectionTimeoutSeconds = 10;
+    private const double MatchThreshold = 40;
+
+    public AuthenticationController()
+    {
+        if (!Directory.Exists(PrintsFolderName))
+            Directory.CreateDirectory(PrintsFolderName);
+    }
 
     [HttpPost]
     public async Task<IActionResult> RegisterUser(UserViewModel person)
     {
-        var userFolder = Path.Combine(PrintsFolderName, person.Name);
-        Directory.CreateDirectory(userFolder);
+        var users = GetUserList();
 
         using var device = new DeviceAccessor().AccessFingerprintDevice();
         var tcs = new TaskCompletionSource<bool>();
-
+        bool isFingerprintDuplicate = false;
         try
         {
             device.FingerDetected += (sender, args) =>
@@ -32,21 +40,30 @@ public class AuthenticationController : ControllerBase
                 {
                     device.StopFingerDetection();
                     var fingerprint = device.ReadFingerprint();
-                    HandleNewFingerprint(fingerprint, person);
-                    tcs.SetResult(true);
+
+                    if (IsFingerprintDuplicate(fingerprint, users))
+                    {
+                        isFingerprintDuplicate = true;
+                    }
+                    else
+                    {
+                        SaveFingerprint(fingerprint, person);
+                    }
+                    if(!tcs.Task.IsCompleted)
+                        tcs.SetResult(true);
                 }
             };
 
             device.StartFingerDetection();
-
-            var taskCompleted = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            var taskCompleted = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(DetectionTimeoutSeconds)));
 
             if (taskCompleted != tcs.Task)
-            {
                 return StatusCode(408, "Fingerprint detection timed out.");
-            }
+            
+            if (isFingerprintDuplicate)
+                return BadRequest("Fingerprint already registered.");
 
-            return Ok();
+            return Ok("User registered successfully.");
         }
         catch (Exception ex)
         {
@@ -59,7 +76,7 @@ public class AuthenticationController : ControllerBase
     {
         var users = GetUserList();
         var result = new Dictionary<string, bool>();
-        
+
         using var device = new DeviceAccessor().AccessFingerprintDevice();
         var tcs = new TaskCompletionSource<bool>();
 
@@ -70,27 +87,24 @@ public class AuthenticationController : ControllerBase
                 if (!tcs.Task.IsCompleted)
                 {
                     device.StopFingerDetection();
-
                     var readFingerprint = device.ReadFingerprint();
-                    result =  ValidateFingerprint(readFingerprint, users);
-
-                    device.StartFingerDetection();
-                    tcs.SetResult(true);
+                    result = MatchFingerprint(readFingerprint, users);
+                    if(!tcs.Task.IsCompleted)
+                        tcs.SetResult(true);
                 }
             };
 
             device.StartFingerDetection();
-
-            var taskCompleted = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+            var taskCompleted = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(DetectionTimeoutSeconds)));
 
             if (taskCompleted != tcs.Task)
-            {
                 return StatusCode(408, "Fingerprint detection timed out.");
-            }
-            if(result.ContainsValue(true))
-                return Ok(result.Keys);
-            else
-                return BadRequest(result.Keys);
+
+            var match = result.FirstOrDefault(r => r.Value);
+            if (match.Value)
+                return Ok($"Fingerprint matched with: {match.Key}");
+
+            return BadRequest("No match found.");
         }
         catch (Exception ex)
         {
@@ -98,87 +112,72 @@ public class AuthenticationController : ControllerBase
         }
     }
 
-    private void HandleNewFingerprint(Bitmap bitmap, UserViewModel person)
+    private void SaveFingerprint(Bitmap bitmap, UserViewModel person)
     {
-        var randomFilename = Path.GetRandomFileName().Replace('.', 'f') + ".bmp";
         var userFolder = Path.Combine(PrintsFolderName, person.Name);
+        Directory.CreateDirectory(userFolder);
 
+        var randomFilename = Path.GetRandomFileName().Replace('.', 'f') + ".bmp";
         bitmap.Save(Path.Combine(userFolder, randomFilename));
+    }
+
+    private static bool IsFingerprintDuplicate(Bitmap fingerprint, IEnumerable<Person> users)
+    {
+        return MatchFingerprint(fingerprint, users).Any(result => result.Value);
+    }
+
+    private static Dictionary<string, bool> MatchFingerprint(Bitmap bitmap, IEnumerable<Person> allPersons)
+    {
+        ImageConverter imageConverter = new();
+        var probe = new FingerprintTemplate(
+            new FingerprintImage((byte[])imageConverter.ConvertTo(bitmap, typeof(byte[]))));
+
+        var matcher = new FingerprintMatcher(probe);
+        var matches = new Dictionary<string, bool>();
+
+        foreach (var person in allPersons)
+        {
+            foreach (var fingerprint in person.Fingerprints)
+            {
+                if (matcher.Match(fingerprint) >= MatchThreshold)
+                {
+                    matches[person.Name] = true;
+                    return matches;
+                }
+            }
+        }
+
+        matches["No match"] = false;
+        return matches;
     }
 
     private static IEnumerable<Person> GetUserList()
     {
+        var persons = new List<Person>();
+        var directories = Directory.GetDirectories(PrintsFolderName);
+
         ImageConverter imageConverter = new();
-        var allPersons = new List<Person>();
-        var i = 0;
-        // Create missing templates
-        foreach (var username in GetUsernames())
+        int id = 0;
+
+        foreach (var directory in directories)
         {
-            var person = new Person();
-            person.Id = i++;
-            var dataFolder = Path.Combine(PrintsFolderName, username);
-            var allBitmaps = Directory.GetFiles(dataFolder, "*.bmp", SearchOption.TopDirectoryOnly).Select(Path.GetFileName);
-            foreach (var bitmapFile in allBitmaps)
+            var person = new Person
             {
-                Bitmap bitmap = new Bitmap(Path.Combine(dataFolder, bitmapFile));
-                    person.Fingerprints.Add(new FingerprintTemplate(
-                        new FingerprintImage((byte[])imageConverter.ConvertTo(bitmap, typeof(byte[])))));
-            
-                allPersons.Add(person);
-            }
-        }
+                Id = id++,
+                Name = Path.GetFileName(directory)
+            };
 
-        return allPersons;
-    }
+            var bitmapFiles = Directory.GetFiles(directory, "*.bmp");
 
-    private static IEnumerable<string> GetUsernames()
-    {
-        var users = Directory.GetDirectories(PrintsFolderName);
-
-        foreach (var directory in users)
-        {
-            var username = directory.Substring(PrintsFolderName.Length + 1);
-            yield return username;
-        }
-    }
-
-    private static Dictionary<string, bool> ValidateFingerprint(Bitmap bitmap, IEnumerable<Person> allPersons)
-    {
-        ImageConverter imageConverter = new();
-        var result = new Dictionary<string, bool>();
-        
-        var probe = new FingerprintTemplate(
-            new FingerprintImage((byte[])imageConverter.ConvertTo(bitmap, typeof(byte[]))));
-        
-        var matcher = new FingerprintMatcher(probe);
-        Person match = null;
-        double max = Double.NegativeInfinity;
-        foreach (var candidate in allPersons)
-        {
-            foreach(var fingerPrint in candidate.Fingerprints)
+            foreach (var file in bitmapFiles)
             {
-                double similarity = matcher.Match(fingerPrint);
-                if (similarity > max)
-                {
-                    max = similarity;
-                    match = candidate;
-                }
+                Bitmap bitmap = new Bitmap(file);
+                var fingerprintTemplate = new FingerprintTemplate(
+                    new FingerprintImage((byte[])imageConverter.ConvertTo(bitmap, typeof(byte[]))));
+                person.Fingerprints.Add(fingerprintTemplate);
             }
+            persons.Add(person);
         }
-        double threshold = 40;
-        if(max >= threshold && match != null)
-        {
-            var user = GetUsernames().ToList().ElementAt(match.Id);
-            
-            result[$"Matched with {user}!"] = true;
-            
-            return  result;
-        }
-        else
-        {
-            result["No match!"] = false;
-
-            return  result;
-        }
+        return persons;
     }
 }
